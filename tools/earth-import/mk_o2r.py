@@ -46,7 +46,9 @@ def cube(radius):
     for z in (-radius, radius):
         for y in (-radius, radius):
             for x in (-radius, radius):
-                n = [c * 127 // (radius * 2) for c in (x, y, z)]
+                # A corner normal is the corner direction, so it only depends on the
+                # sign: scaling by the radius would overflow the signed byte.
+                n = [127 if c > 0 else -127 for c in (x, y, z)]
                 verts.append((x, y, z, 0, 0, *[c & 0xFF for c in n], 255))
 
     # Indices into the order built above: bit0=x, bit1=y, bit2=z.
@@ -70,23 +72,45 @@ def vertex_xml(verts):
 
 
 def _combine(root, cycle0, cycle1):
+    """Emit a SetCombineLERP node.
+
+    The alpha slots take their own enum family: ResourceFactoryDisplayList::
+    GetCombineLERPValue keeps separate G_CCMUX_/G_ACMUX_ tables, and the numbering
+    differs (G_CCMUX_0 is 8, G_ACMUX_0 is 7). Feeding colour names to the alpha
+    slots yields an out-of-range mux and geometry that never shows up.
+    """
     attrs = {}
     for suffix, mux in (("0", cycle0), ("1", cycle1)):
         for slot, value in zip("abcd", mux):
-            attrs[f"{slot.upper()}{suffix}"] = value   # colour
-            attrs[f"A{slot}{suffix}"] = value          # alpha
+            attrs[f"{slot.upper()}{suffix}"] = value                            # colour
+            attrs[f"A{slot}{suffix}"] = value.replace("G_CCMUX_", "G_ACMUX_")   # alpha
     ET.SubElement(root, "SetCombineLERP", **attrs)
 
 
-def displaylist_xml(vtx_path, vtx_count, tris):
+def displaylist_xml(vtx_path, vtx_count, tris, debug=False):
     root = ET.Element("DisplayList", Version="0")
     ET.SubElement(root, "PipeSync")
-    _combine(root, SHADE_ONLY, PASS_COMBINED)
+    if debug:
+        # Flat red, unlit and double-sided: proves the chunk reaches the screen
+        # without depending on winding or lighting.
+        # G_FOG stays SET on purpose. RCP_SetupDL_29 leaves the blender on
+        # G_RM_FOG_SHADE_A, and the interpreter keys fog off the render mode
+        # (interpreter.cpp: use_fog = other_mode_l >> 30 == G_BL_CLR_FOG), not the
+        # geometry mode. With G_FOG cleared the RSP stops writing the depth-derived
+        # fog factor and the raw vertex alpha (255) is used instead, painting the
+        # chunk 100% fog colour — invisible against a hazy level.
+        ET.SubElement(root, "ClearGeometryMode", G_CULL_BACK="1", G_LIGHTING="1")
+        _combine(root, ("G_CCMUX_0", "G_CCMUX_0", "G_CCMUX_0", "G_CCMUX_PRIMITIVE"), PASS_COMBINED)
+        ET.SubElement(root, "SetPrimColor", M="0", L="0", R="255", G="0", B="0", A="255")
+    else:
+        _combine(root, SHADE_ONLY, PASS_COMBINED)
     ET.SubElement(root, "LoadVertices", Path=vtx_path, Count=str(vtx_count),
                   VertexBufferIndex="0", VertexOffset="0")
     for v0, v1, v2 in tris:
         ET.SubElement(root, "Triangle1", V00=str(v0), V01=str(v1), V02=str(v2), Flag0="0")
     ET.SubElement(root, "PipeSync")
+    if debug:
+        ET.SubElement(root, "SetGeometryMode", G_CULL_BACK="1", G_LIGHTING="1")
     # G_CC_MODULATEIDECALA / G_CC_PASS2, the state RCP_SetupDL_29 set up.
     _combine(root, ("G_CCMUX_TEXEL0", "G_CCMUX_0", "G_CCMUX_SHADE", "G_CCMUX_0"), PASS_COMBINED)
     ET.SubElement(root, "EndDisplayList")
@@ -102,13 +126,13 @@ def meta(resource_type):
     return json.dumps({"format": "XML", "type": resource_type, "version": 0}, indent=2) + "\n"
 
 
-def build(radius):
+def build(radius, debug=False):
     """Return the archive contents as {archive path: text}."""
     verts, tris = cube(radius)
     return {
         VTX_PATH: vertex_xml(verts),
         VTX_PATH + ".meta": meta("Vertex"),
-        DL_PATH: displaylist_xml(VTX_PATH, len(verts), tris),
+        DL_PATH: displaylist_xml(VTX_PATH, len(verts), tris, debug),
         DL_PATH + ".meta": meta("DisplayList"),
     }
 
@@ -139,6 +163,12 @@ def self_test():
 
     dl = ET.fromstring(contents[DL_PATH])
     assert dl.tag == "DisplayList"
+    # Colour slots take G_CCMUX_, alpha slots G_ACMUX_; mixing them silently
+    # produces an invalid mux and invisible geometry.
+    for lerp in dl.findall("SetCombineLERP"):
+        for name, value in lerp.attrib.items():
+            family = "G_ACMUX_" if name.startswith("A") and len(name) == 3 else "G_CCMUX_"
+            assert value.startswith(family), f"{name}={value} should be {family}*"
     assert dl[-1].tag == "EndDisplayList", "display list must terminate"
     loads = dl.findall("LoadVertices")
     assert len(loads) == 1 and loads[0].get("Path") == VTX_PATH
@@ -178,13 +208,15 @@ def main():
     ap.add_argument("--radius", type=int, default=300,
                     help="half-extent in game units; must match EARTH_CUBE_RADIUS in src/mods/earth.c")
     ap.add_argument("--self-test", action="store_true", help="validate the generator and exit")
+    ap.add_argument("--debug-visible", action="store_true",
+                    help="flat red, unlit, double-sided: locate the chunk in a busy scene")
     args = ap.parse_args()
 
     if args.self_test:
         self_test()
         return 0
 
-    out = write_archive(args.out, build(args.radius))
+    out = write_archive(args.out, build(args.radius, args.debug_visible))
     print(f"wrote {out} ({out.stat().st_size} bytes)")
     return 0
 
