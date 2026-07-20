@@ -29,10 +29,20 @@ static const ALIGN_ASSET(2) char sEarthZoneOtr[] = "__OTR__earth/zoneDL";
 static bool sEarthLoaded = false;
 static s32 sEarthDelay = 0;
 static s32 sEarthFirstSlot = -1;
+static bool sEarthMissing = false;
 
 static void Earth_LoadChunks(void) {
     ObjectInfo* info = &gObjectInfo[EARTH_OBJ_ID];
     s32 slot;
+
+    // gSPDisplayList resolves the __OTR__ path and dereferences the result without
+    // checking it, so an archive that is absent, stale or holding a different zone
+    // takes the whole game down inside the draw loop. Resolve it here first, where
+    // a miss can simply mean "stay vanilla".
+    if (LOAD_ASSET_RAW(sEarthZoneOtr) == NULL) {
+        sEarthMissing = true;
+        return;
+    }
 
     info->dList = (Gfx*) sEarthZoneOtr;
     info->action = NULL;
@@ -63,6 +73,12 @@ static void Earth_LoadChunks(void) {
 }
 
 void Earth_Update(void) {
+    // Nothing to import: leave the level exactly as vanilla rather than retrying
+    // the lookup every frame.
+    if (sEarthMissing) {
+        return;
+    }
+
     if (gLevelMode != LEVELMODE_ALL_RANGE) {
         sEarthLoaded = false;
         sEarthDelay = 0;
