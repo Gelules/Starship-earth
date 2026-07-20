@@ -1,0 +1,21 @@
+{
+  "la-defense": {
+    "label": "La Défense, Paris",
+    "lat": 48.8926,
+    "lon": 2.2358,
+    "radius_m": 500,
+    "note": "Grande Arche (110 m) as the scale reference; 36 towers over 80 m."
+  },
+  "manhattan-midtown": {
+    "label": "Midtown Manhattan, New York",
+    "lat": 40.7549,
+    "lon": -73.9840,
+    "radius_m": 500
+  },
+  "bordeaux-centre": {
+    "label": "Bordeaux, centre",
+    "lat": 44.8412,
+    "lon": -0.5800,
+    "radius_m": 500
+  }
+}
