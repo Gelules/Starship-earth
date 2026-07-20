@@ -626,6 +626,8 @@ void Game_Update(void) {
 #if MODS_SPAWNER == 1
 #include "../mods/spawner.c"
 #endif
+// Gated at runtime by the gEarthMod CVar rather than a compile-time switch.
+#include "../mods/earth.c"
 
 Actor* Game_SpawnActor(ObjectId objId) {
     Actor* actor = &gActors[0];

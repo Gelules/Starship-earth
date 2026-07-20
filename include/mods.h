@@ -96,6 +96,8 @@ void RamMod_Update(void);
 void Spawner(void);
 #endif
 
+void Earth_Update(void);
+
 #define DEBUG_BOSS_KILLER 0
 #define DEBUG_VERSUS 0
 

@@ -167,6 +167,9 @@ void OnGameUpdatePost(IEvent* event) {
     if (CVarGetInteger("gSpawnerMod", 0) == 1) {
         Spawner();
     }
+    if (CVarGetInteger("gEarthMod", 0) == 1) {
+        Earth_Update();
+    }
 }
 
 void OnPlayUpdateEvent(IEvent* event) {

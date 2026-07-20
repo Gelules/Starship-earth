@@ -846,6 +846,11 @@ void DrawDebugMenu() {
                        "WARNING: Spawning an object that's not loaded in memory will likely result in a crash."
         });
 
+        UIWidgets::CVarCheckbox("Earth Geometry", "gEarthMod", {
+            .tooltip = "Load real-world geometry as scenery when entering All-Range mode.\n"
+                       "Spike stage: spawns test cubes in front of the player."
+        });
+
         UIWidgets::CVarCheckbox("Jump To Map", "gDebugJumpToMap", {
             .tooltip = "Press Z + R + C-UP to get back to the map"
         });
