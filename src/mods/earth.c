@@ -52,11 +52,22 @@ static f32 sEarthCubeHitbox[7] = {
     1.0f, 0.0f, EARTH_CUBE_RADIUS, 0.0f, EARTH_CUBE_RADIUS, 0.0f, EARTH_CUBE_RADIUS,
 };
 
-// Spread relative to where the player enters all-range, so one screenshot shows
-// the cubes whatever the entry heading is.
+// A ring around where the player enters all-range, at the player's own altitude.
+// Real geometry will sit on the ground, but for the spike this makes collision and
+// gunfire testable without flying precisely: whatever heading the player leaves on,
+// a cube is a second away.
+#define EARTH_RING 900.0f
+#define EARTH_RING_DIAG 636.0f // EARTH_RING / sqrt(2)
+
 static Vec3f sEarthSpawnOffsets[] = {
-    { 0.0f, 0.0f, -1500.0f },     { -1200.0f, 0.0f, -2200.0f }, { 1200.0f, 0.0f, -2200.0f },
-    { -2400.0f, 0.0f, -3000.0f }, { 2400.0f, 0.0f, -3000.0f },
+    { 0.0f, 0.0f, -EARTH_RING },
+    { 0.0f, 0.0f, EARTH_RING },
+    { -EARTH_RING, 0.0f, 0.0f },
+    { EARTH_RING, 0.0f, 0.0f },
+    { -EARTH_RING_DIAG, 0.0f, -EARTH_RING_DIAG },
+    { EARTH_RING_DIAG, 0.0f, -EARTH_RING_DIAG },
+    { -EARTH_RING_DIAG, 0.0f, EARTH_RING_DIAG },
+    { EARTH_RING_DIAG, 0.0f, EARTH_RING_DIAG },
 };
 
 static bool sEarthLoaded = false;
@@ -82,7 +93,7 @@ static void Earth_LoadChunks(void) {
             gScenery360[slot].obj.status = OBJ_ACTIVE;
             gScenery360[slot].obj.id = EARTH_OBJ_ID;
             gScenery360[slot].obj.pos.x = gPlayer[0].pos.x + sEarthSpawnOffsets[i].x;
-            gScenery360[slot].obj.pos.y = gGroundHeight + EARTH_CUBE_RADIUS + sEarthSpawnOffsets[i].y;
+            gScenery360[slot].obj.pos.y = gPlayer[0].pos.y + sEarthSpawnOffsets[i].y;
             gScenery360[slot].obj.pos.z = gPlayer[0].pos.z + sEarthSpawnOffsets[i].z;
             gScenery360[slot].obj.rot.y = 0.0f;
             Object_SetInfo(&gScenery360[slot].info, gScenery360[slot].obj.id);
