@@ -18,6 +18,7 @@ import argparse
 import json
 import math
 import pathlib
+import struct
 import sys
 import urllib.parse
 import urllib.request
@@ -25,6 +26,28 @@ import xml.etree.ElementTree as ET
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from mk_o2r import _combine, _serialise, meta, write_archive  # noqa: E402
+
+# A binary resource loads through the OTR path: libultraship strips a 64-byte
+# header (ResourceLoader.cpp), reads the resource type/version from it, then hands
+# the rest to the factory. A .meta sidecar is the alternative, but the .meta+binary
+# route fails to resolve a factory here, whereas every vanilla binary asset uses
+# this header -- so we mirror it. Header layout (little-endian, native on x86):
+#   u8 byteOrder(0=Little), u8 isCustom, u8[2] pad, u32 type, u32 version,
+#   u64 id, padding to 64.
+GARR = 0x47415252  # GenericArray FourCC "GARR" (ResourceType.h)
+ARRAY_F32 = 7      # GenericArray element type index for f32 (GenericArray.h)
+
+
+def otr_binary(fourcc, payload, version=0):
+    header = struct.pack("<BBBBIIQ", 0, 1, 0, 0, fourcc, version, 0)
+    header += b"\x00" * (64 - len(header))
+    return header + payload
+
+
+def genericarray_f32(floats):
+    floats = list(floats)
+    payload = struct.pack("<II", ARRAY_F32, len(floats)) + struct.pack("<%df" % len(floats), *floats)
+    return otr_binary(GARR, payload)
 
 OVERPASS = "https://overpass-api.de/api/interpreter"
 USER_AGENT = "Starship-earth/0.1 (personal project; OSM data used under ODbL)"
@@ -222,7 +245,7 @@ def displaylist_xml(name, batches):
 
 
 def build_zone(elements, lat0, lon0, name="zone", scale=UNITS_PER_METRE):
-    faces, stats = [], {"buildings": 0, "tagged": 0, "tallest": 0.0}
+    faces, boxes, stats = [], [], {"buildings": 0, "tagged": 0, "tallest": 0.0}
     for el in elements:
         if el.get("type") != "way" or "geometry" not in el:
             continue
@@ -236,10 +259,21 @@ def build_zone(elements, lat0, lon0, name="zone", scale=UNITS_PER_METRE):
         stats["buildings"] += 1
         stats["tagged"] += 1 if ("height" in tags or "building:levels" in tags) else 0
         stats["tallest"] = max(stats["tallest"], metres)
+        sring = [(x * scale, z * scale) for x, z in ring]
+        sheight = metres * scale
         # A little colour variation so the city does not read as one grey mass.
         tone = 150 + (el["id"] % 5) * 12
-        faces.extend(extrude([(x * scale, z * scale) for x, z in ring], metres * scale,
-                             (tone, tone, int(tone * 0.96))))
+        faces.extend(extrude(sring, sheight, (tone, tone, int(tone * 0.96))))
+        # Axis-aligned box for collision, already in the game's Hitbox layout
+        # (z, y, x; each offset then half-size), at the bake scale. The mod scales
+        # it by EARTH_SCALE at runtime so it tracks the geometry. Base on the deck.
+        xs = [p[0] for p in sring]
+        zs = [p[1] for p in sring]
+        boxes.append((
+            (min(zs) + max(zs)) / 2, (max(zs) - min(zs)) / 2,  # z offset, half-size
+            sheight / 2, sheight / 2,                          # y offset, half-size
+            (min(xs) + max(xs)) / 2, (max(xs) - min(xs)) / 2,  # x offset, half-size
+        ))
     batches = batch(faces)
     contents = {}
     for i, (verts, _) in enumerate(batches):
@@ -247,8 +281,13 @@ def build_zone(elements, lat0, lon0, name="zone", scale=UNITS_PER_METRE):
         contents[f"earth/{name}Vtx{i}.meta"] = meta("Vertex")
     contents[f"earth/{name}DL"] = displaylist_xml(name, batches)
     contents[f"earth/{name}DL.meta"] = meta("DisplayList")
+    # Collision boxes: leading building count, then 6 floats per building. The mod
+    # reads this as a flat float array and scales it into a live Hitbox.
+    flat = [float(len(boxes))] + [c for box in boxes for c in box]
+    contents[f"earth/{name}Box"] = genericarray_f32(flat)
     stats["batches"] = len(batches)
     stats["triangles"] = sum(len(t) for _, t in batches)
+    stats["boxes"] = len(boxes)
     return contents, stats
 
 
@@ -290,6 +329,33 @@ def self_test():
                        {"lat": 48.8902, "lon": 2.2361}, {"lat": 48.89, "lon": 2.2361}]}],
         48.89, 2.2358, name="t")
     assert stats["buildings"] == 1 and stats["triangles"] == 10, stats
+
+    # Collision box: 64-byte OTR header (type GARR, version 0), then the GenericArray
+    # header (element type f32, element count), then the floats -- read back the way
+    # libultraship will: strip 64, then the factory reads type/count, then C sees a
+    # flat float array whose [0] is the building count.
+    blob = contents["earth/tBox"]
+    bo, custom, _, _, fourcc, ver, _ = struct.unpack_from("<BBBBIIQ", blob, 0)
+    assert (bo, fourcc, ver) == (0, GARR, 0), (bo, fourcc, ver)
+    assert "earth/tBox.meta" not in contents, "binary box resource must not ship a .meta"
+    atype, acount = struct.unpack_from("<II", blob, 64)
+    assert atype == ARRAY_F32, atype
+    flat = struct.unpack_from("<%df" % acount, blob, 72)
+    assert acount == len(flat) == 1 + 6 * 1, acount
+    assert flat[0] == 1.0, "leading building count"
+    zoff, zsz, yoff, ysz, xoff, xsz = flat[1:7]
+    # The box must be the footprint's bounding box (same projection) and, in y,
+    # sit on the deck at half the 10 m height.
+    pr = [project(p["lat"], p["lon"], 48.89, 2.2358) for p in
+          [{"lat": 48.89, "lon": 2.2358}, {"lat": 48.8902, "lon": 2.2358},
+           {"lat": 48.8902, "lon": 2.2361}, {"lat": 48.89, "lon": 2.2361}]]
+    exs, ezs = [p[0] for p in pr], [p[1] for p in pr]
+    assert abs(xoff - (min(exs) + max(exs)) / 2) < 1e-3 and abs(xsz - (max(exs) - min(exs)) / 2) < 1e-3
+    assert abs(zoff - (min(ezs) + max(ezs)) / 2) < 1e-3 and abs(zsz - (max(ezs) - min(ezs)) / 2) < 1e-3
+    assert (yoff, ysz) == (5.0, 5.0), (yoff, ysz)  # base on the deck, half-height offset
+    # No box coordinate may reach a Hitbox sentinel (200000+) even scaled up 20x.
+    assert all(abs(c) * 20 < 200000 for c in flat[1:]), "box coord near HITBOX sentinel"
+
     dl = ET.fromstring(contents["earth/tDL"])
     loads = dl.findall("LoadVertices")
     assert loads and all(c.get("Path") in contents for c in loads), "batch path not in archive"
@@ -346,7 +412,7 @@ def main():
     pct = 100 * stats["tagged"] / stats["buildings"] if stats["buildings"] else 0
     print(f"{stats['buildings']} buildings ({pct:.0f}% with a real height, tallest "
           f"{stats['tallest']:.0f} m), {stats['triangles']} triangles in "
-          f"{stats['batches']} batches")
+          f"{stats['batches']} batches, {stats['boxes']} collision boxes")
     print(f"wrote {out} ({out.stat().st_size} bytes)")
     print("Data (c) OpenStreetMap contributors, ODbL.")
     return 0
