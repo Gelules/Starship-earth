@@ -1633,7 +1633,20 @@ void Scenery360_Draw(Scenery360* this) {
     f32 xyOffsetBounds = 2000.0f + 1000.0f;
     f32 xyObjDistBoundMod = 0.5f;
 
-    if (this->obj.id == OBJ_SCENERY_SY_SHOGUN_SHIP) {
+    if (this->obj.id == OBJ_SCENERY_UNK_155) {
+        // The earth mod draws a whole imported district as one object, so this
+        // frustum test on the single object origin is all-or-nothing: once the
+        // origin drifts out of these bounds the entire city blinks off, even with
+        // buildings right in front of the camera. The geometry spans the arena, so
+        // the origin has to stay "visible" across the full arena (~+-5000) out to
+        // the draw distance (gProjectFar ~30000). These bounds effectively never
+        // cull it; per-triangle near/far clipping still handles real visibility.
+        // OBJ_SCENERY_UNK_155 is unused by vanilla, so this branch is mod-only.
+        behindZdist = 30000.0f;
+        frontZdist = -30000.0f;
+        xyOffsetBounds = 30000.0f;
+        xyObjDistBoundMod = 1.0f;
+    } else if (this->obj.id == OBJ_SCENERY_SY_SHOGUN_SHIP) {
         behindZdist = 4000.0f;
         frontZdist = -13000.0f;
         xyOffsetBounds = 4500.0f;
