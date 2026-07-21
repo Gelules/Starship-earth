@@ -27,7 +27,6 @@
 static const ALIGN_ASSET(2) char sEarthZoneOtr[] = "__OTR__earth/zoneDL";
 
 static bool sEarthLoaded = false;
-static s32 sEarthDelay = 0;
 static s32 sEarthFirstSlot = -1;
 static bool sEarthMissing = false;
 
@@ -60,11 +59,13 @@ static void Earth_LoadChunks(void) {
         Scenery360_Initialize(&gScenery360[slot]);
         gScenery360[slot].obj.status = OBJ_ACTIVE;
         gScenery360[slot].obj.id = EARTH_OBJ_ID;
-        // Drop the district around the player, sitting on the level's ground.
+        // Centred on the Arwing the moment the player takes control, sitting on the
+        // level's ground. That is the middle of the arena in practice, and it also
+        // keeps the object origin in view: Scenery360_Draw culls on that single
+        // point, so a district whose origin drifts behind the camera vanishes whole.
         gScenery360[slot].obj.pos.x = gPlayer[0].pos.x;
         gScenery360[slot].obj.pos.y = gGroundHeight;
-        // pos.z is progress along the level path; trueZpos is where the Arwing
-        // actually is, and it is what Scenery360 positions are measured against.
+        // pos.z is progress along the level path; trueZpos is the real position.
         gScenery360[slot].obj.pos.z = gPlayer[0].trueZpos;
         gScenery360[slot].obj.rot.y = 0.0f;
         Object_SetInfo(&gScenery360[slot].info, gScenery360[slot].obj.id);
@@ -81,15 +82,15 @@ void Earth_Update(void) {
 
     if (gLevelMode != LEVELMODE_ALL_RANGE) {
         sEarthLoaded = false;
-        sEarthDelay = 0;
         sEarthFirstSlot = -1;
         return;
     }
 
-    // The level places the player some frames after all-range starts; spawning on
-    // the first frame would anchor every chunk to the origin instead of the arena.
+    // A level is already in all-range mode during its intro flyby, where the
+    // Arwing is nowhere near the arena. Wait until the player actually has
+    // control, otherwise the district lands behind the opening cutscene.
     if (!sEarthLoaded) {
-        if (++sEarthDelay < 60) {
+        if (gPlayer[0].state != PLAYERSTATE_ACTIVE) {
             return;
         }
         sEarthLoaded = true;
@@ -101,7 +102,6 @@ void Earth_Update(void) {
     // we claimed and rebuild the chunks once the level has taken it back.
     if ((sEarthFirstSlot >= 0) && (gScenery360[sEarthFirstSlot].obj.id != EARTH_OBJ_ID)) {
         sEarthLoaded = false;
-        sEarthDelay = 0;
         sEarthFirstSlot = -1;
     }
 }
