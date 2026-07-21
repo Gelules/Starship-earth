@@ -1771,6 +1771,7 @@ void Player_CollisionCheck(Player* player) {
     s32 i;
     s32 j;
     s32 temp_v0;
+    f32 objGate; // earth mod: per-object collision gate radius
     f32 spE8;
     f32 spE4;
     f32 spE0;
@@ -1847,7 +1848,13 @@ void Player_CollisionCheck(Player* player) {
                     spC8.x = scenery360->obj.pos.x - player->pos.x;
                     spC8.z = scenery360->obj.pos.z - player->trueZpos;
 
-                    if (sqrtf(SQ(spC8.x) + SQ(spC8.z)) < sp8C) {
+                    // The earth mod is one object spanning the whole arena, with a
+                    // hitbox per building, so the near-object gate would skip it
+                    // everywhere but the city centre. Let it be tested arena-wide.
+                    // Per-iteration so it never leaks into the next scenery's gate.
+                    objGate = (scenery360->obj.id == OBJ_SCENERY_UNK_155) ? 30000.0f : sp8C;
+
+                    if (sqrtf(SQ(spC8.x) + SQ(spC8.z)) < objGate) {
                         if ((scenery360->obj.id == OBJ_SCENERY_AQ_CORAL_REEF_1) ||
                             (scenery360->obj.id == OBJ_SCENERY_VS_KA_FLBASE) ||
                             (scenery360->obj.id == OBJ_SCENERY_VS_PYRAMID_2) ||

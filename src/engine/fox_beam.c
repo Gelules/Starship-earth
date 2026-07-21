@@ -256,6 +256,13 @@ s32 PlayerShot_CheckObjectHitbox(PlayerShot* shot, f32* hitboxData, Object* obj)
         checkDist = 3500.0f;
     }
 
+    // The earth mod's district is one object at the arena centre with a hitbox per
+    // building, so this near-object gate would only let shots hit the middle of the
+    // city. Test it arena-wide; the function still impacts the shot per building box.
+    if (obj->id == OBJ_SCENERY_UNK_155) {
+        checkDist = 30000.0f;
+    }
+
     if ((fabsf(shot->obj.pos.z - obj->pos.z) < checkDist) && (fabsf(shot->obj.pos.x - obj->pos.x) < checkDist) &&
         (fabsf(shot->obj.pos.y - obj->pos.y) < checkDist)) {
         count = *hitboxData;
