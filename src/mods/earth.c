@@ -59,14 +59,15 @@ static void Earth_LoadChunks(void) {
         Scenery360_Initialize(&gScenery360[slot]);
         gScenery360[slot].obj.status = OBJ_ACTIVE;
         gScenery360[slot].obj.id = EARTH_OBJ_ID;
-        // Centred on the Arwing the moment the player takes control, sitting on the
-        // level's ground. That is the middle of the arena in practice, and it also
-        // keeps the object origin in view: Scenery360_Draw culls on that single
-        // point, so a district whose origin drifts behind the camera vanishes whole.
-        gScenery360[slot].obj.pos.x = gPlayer[0].pos.x;
+        // The all-range arena is a square centred on the world origin (Player_-
+        // CheckBounds360: |pos.x|,|pos.z| < 12500 on Fortuna), so centre the
+        // district there too. The player spawns inside it, and the U-turn boundary
+        // then sits symmetrically around the city instead of leaving a slab of
+        // empty Fortuna on one side. A radius-1000 m zone at scale 8 is 8000 units,
+        // well inside 12500. Ground height keeps the building bases on the deck.
+        gScenery360[slot].obj.pos.x = 0.0f;
         gScenery360[slot].obj.pos.y = gGroundHeight;
-        // pos.z is progress along the level path; trueZpos is the real position.
-        gScenery360[slot].obj.pos.z = gPlayer[0].trueZpos;
+        gScenery360[slot].obj.pos.z = 0.0f;
         gScenery360[slot].obj.rot.y = 0.0f;
         Object_SetInfo(&gScenery360[slot].info, gScenery360[slot].obj.id);
         break;
