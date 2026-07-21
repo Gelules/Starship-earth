@@ -851,7 +851,7 @@ void DrawDebugMenu() {
                        "when entering All-Range mode."
         });
 
-        UIWidgets::CVarSliderFloat("Earth Scale", "gEarthScale", 0.5f, 20.0f, 4.0f, {
+        UIWidgets::CVarSliderFloat("Earth Scale", "gEarthScale", 0.5f, 20.0f, 8.0f, {
             .tooltip = "Size of the imported district: game units per real-world metre.\n"
                        "The archive is baked at 1 unit/m, so this is the live EARTH_SCALE.\n"
                        "Calibrate by feel: the Grande Arche (110 m) should dwarf the Arwing.",

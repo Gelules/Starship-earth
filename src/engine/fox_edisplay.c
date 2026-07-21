@@ -1704,7 +1704,7 @@ void Scenery360_Draw(Scenery360* this) {
                     // feel instead of a constant frozen into the archive. Scaling
                     // about the object origin keeps the building bases on the ground.
                     if (this->obj.id == OBJ_SCENERY_UNK_155) {
-                        f32 earthScale = CVarGetFloat("gEarthScale", 4.0f);
+                        f32 earthScale = CVarGetFloat("gEarthScale", 8.0f);
                         Matrix_Scale(gGfxMatrix, earthScale, earthScale, earthScale, MTXF_APPLY);
                     }
                     Matrix_SetGfxMtx(&gMasterDisp);
