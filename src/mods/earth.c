@@ -26,9 +26,42 @@
 // place here but that origin.
 static const ALIGN_ASSET(2) char sEarthZoneOtr[] = "__OTR__earth/zoneDL";
 
+// One axis-aligned box per building, from the OSM footprints, so flying into a
+// building takes damage through the stock Scenery360 hitbox path. The archive
+// stores them at bake scale as a flat float array [count, then 6 per building in
+// Hitbox order]; osm2earth.py writes it, GenericArray f32.
+static const ALIGN_ASSET(2) char sEarthBoxesOtr[] = "__OTR__earth/zoneBox";
+
+// Player_CheckHitboxCollision reads count as the first float then 6 floats per
+// box, so the live hitbox is exactly the archive array with every offset and size
+// multiplied by EARTH_SCALE (the count is left alone). Rebuilt when the scale
+// knob moves so collision tracks the geometry. Cap is a backstop; a 2 km city is
+// ~1-3k buildings.
+#define EARTH_MAX_BOXES 4096
+static f32 sEarthHitbox[1 + 6 * EARTH_MAX_BOXES];
+static const f32* sEarthBoxSrc = NULL;
+static s32 sEarthBoxCount = 0;
+static f32 sEarthBuiltScale = 0.0f;
+
 static bool sEarthLoaded = false;
 static s32 sEarthFirstSlot = -1;
 static bool sEarthMissing = false;
+
+static void Earth_BuildHitbox(f32 scale) {
+    s32 n = sEarthBoxCount;
+    s32 i;
+
+    if (n > EARTH_MAX_BOXES) {
+        printf("[earth] %d buildings over hitbox cap %d; collision limited to the first %d\n", n, EARTH_MAX_BOXES,
+               EARTH_MAX_BOXES);
+        n = EARTH_MAX_BOXES;
+    }
+    sEarthHitbox[0] = n;
+    for (i = 0; i < 6 * n; i++) {
+        sEarthHitbox[1 + i] = sEarthBoxSrc[1 + i] * scale;
+    }
+    sEarthBuiltScale = scale;
+}
 
 static void Earth_LoadChunks(void) {
     ObjectInfo* info = &gObjectInfo[EARTH_OBJ_ID];
@@ -45,10 +78,18 @@ static void Earth_LoadChunks(void) {
 
     info->dList = (Gfx*) sEarthZoneOtr;
     info->action = NULL;
-    // No hitbox yet: one box around a whole district would be meaningless. Real
-    // per-building collision is M4.
-    info->hitbox = gNoHitbox;
     info->damage = 40;
+
+    // One hitbox per building, scaled to match the geometry. A zone with no box
+    // resource (an older archive) simply keeps flying-through, no collision.
+    sEarthBoxSrc = (const f32*) LOAD_ASSET_RAW(sEarthBoxesOtr);
+    if (sEarthBoxSrc != NULL) {
+        sEarthBoxCount = (s32) sEarthBoxSrc[0];
+        Earth_BuildHitbox(CVarGetFloat("gEarthScale", 8.0f));
+        info->hitbox = sEarthHitbox;
+    } else {
+        info->hitbox = gNoHitbox;
+    }
 
     for (slot = 0; slot < 200; slot++) {
         if (gScenery360[slot].obj.status != OBJ_FREE) {
@@ -106,6 +147,14 @@ void Earth_Update(void) {
     // pushes the haze back in world space and reveals the city. gProjectFar feeds
     // guPerspective every frame, so this has to be reasserted every frame.
     gProjectFar = 30000.0f;
+
+    // Keep the collision boxes in step with the live scale knob.
+    if (sEarthBoxSrc != NULL) {
+        f32 scale = CVarGetFloat("gEarthScale", 8.0f);
+        if (scale != sEarthBuiltScale) {
+            Earth_BuildHitbox(scale);
+        }
+    }
 
     // A retry clears gScenery360 without ever leaving all-range, so watch the slot
     // we claimed and rebuild the chunks once the level has taken it back.
