@@ -98,6 +98,14 @@ void Earth_Update(void) {
         return;
     }
 
+    // Fortuna sets its far plane to 12800 at handover, which fogs an 8x-scaled
+    // district into the haze well before its far edge and clips the far side once
+    // it spans more than that. Hold the plane at the value Fortuna itself uses in
+    // open play: the N64 fog is fixed in normalised depth, so a farther plane also
+    // pushes the haze back in world space and reveals the city. gProjectFar feeds
+    // guPerspective every frame, so this has to be reasserted every frame.
+    gProjectFar = 30000.0f;
+
     // A retry clears gScenery360 without ever leaving all-range, so watch the slot
     // we claimed and rebuild the chunks once the level has taken it back.
     if ((sEarthFirstSlot >= 0) && (gScenery360[sEarthFirstSlot].obj.id != EARTH_OBJ_ID)) {
