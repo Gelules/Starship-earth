@@ -847,8 +847,15 @@ void DrawDebugMenu() {
         });
 
         UIWidgets::CVarCheckbox("Earth Geometry", "gEarthMod", {
-            .tooltip = "Load real-world geometry as scenery when entering All-Range mode.\n"
-                       "Spike stage: spawns test cubes in front of the player."
+            .tooltip = "Load a real-world district (imported from OpenStreetMap) as scenery\n"
+                       "when entering All-Range mode."
+        });
+
+        UIWidgets::CVarSliderFloat("Earth Scale", "gEarthScale", 0.5f, 20.0f, 4.0f, {
+            .tooltip = "Size of the imported district: game units per real-world metre.\n"
+                       "The archive is baked at 1 unit/m, so this is the live EARTH_SCALE.\n"
+                       "Calibrate by feel: the Grande Arche (110 m) should dwarf the Arwing.",
+            .format = "%.1f units/m",
         });
 
         UIWidgets::CVarCheckbox("Jump To Map", "gDebugJumpToMap", {

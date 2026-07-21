@@ -1699,6 +1699,14 @@ void Scenery360_Draw(Scenery360* this) {
                     }
                 } else {
                     Matrix_RotateY(gGfxMatrix, this->obj.rot.y * M_DTOR, MTXF_APPLY);
+                    // The earth mod bakes its district at 1 unit per metre and scales
+                    // it here, so EARTH_SCALE is a live knob the player calibrates by
+                    // feel instead of a constant frozen into the archive. Scaling
+                    // about the object origin keeps the building bases on the ground.
+                    if (this->obj.id == OBJ_SCENERY_UNK_155) {
+                        f32 earthScale = CVarGetFloat("gEarthScale", 4.0f);
+                        Matrix_Scale(gGfxMatrix, earthScale, earthScale, earthScale, MTXF_APPLY);
+                    }
                     Matrix_SetGfxMtx(&gMasterDisp);
                     CALL_CANCELLABLE_EVENT(ObjectDrawPostSetupEvent, OBJECT_TYPE_SCENERY360, this) {
                         gSPDisplayList(gMasterDisp++, this->info.dList);
