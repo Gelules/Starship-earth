@@ -889,10 +889,18 @@ s32 Object_CheckCollision(s32 index, Vec3f* pos, Vec3f* vel, s32 mode) {
                     if (Object_CheckPolyCollision(pos, vel, scenery360->obj.id, &scenery360->obj)) {
                         return 999;
                     }
-                } else if ((fabsf(pos->x - scenery360->obj.pos.x) < 2000.0f) &&
-                           (fabsf(pos->z - scenery360->obj.pos.z) < 2000.0f)) {
-                    if (Object_CheckHitboxCollision(pos, scenery360->info.hitbox, &scenery360->obj, 0.0f, 0.0f, 0.0f)) {
-                        return 2;
+                } else {
+                    // The earth district is one object at the arena centre, so the
+                    // near-object gate would only collide enemies at the city centre.
+                    // Widen it for our id so AI craft bounce off (and crash into)
+                    // buildings the way they already do off Fortuna's mountains.
+                    f32 aiGate = (scenery360->obj.id == OBJ_SCENERY_UNK_155) ? 30000.0f : 2000.0f;
+                    if ((fabsf(pos->x - scenery360->obj.pos.x) < aiGate) &&
+                        (fabsf(pos->z - scenery360->obj.pos.z) < aiGate)) {
+                        if (Object_CheckHitboxCollision(pos, scenery360->info.hitbox, &scenery360->obj, 0.0f, 0.0f,
+                                                        0.0f)) {
+                            return 2;
+                        }
                     }
                 }
             }
